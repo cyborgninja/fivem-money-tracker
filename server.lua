@@ -5,9 +5,9 @@ local largeAmountThreshold = 10000 -- set amount threshold
 local discordWebhookUrl = "" -- set discordWebhookUrl
 
 -- send Discord message
-local function sendToDiscord(playerName, changeType, amountChanged)
+local function sendToDiscord(playerName, changeType, amountChanged, moneyType)
     local color
-    if changeType == "increased" then
+    if changeType == "add" then
         color = 3066993 -- green for increase
     else
         color = 15158332 -- red for decrease
@@ -17,7 +17,8 @@ local function sendToDiscord(playerName, changeType, amountChanged)
     local title = "Money Alert"
     local description = table.concat({
         "**Player:** " .. playerName, -- e.g. John Doe
-        "**Type:** " .. changeType, -- e.g. bank/cash
+        "**Type:** " .. changeType, -- e.g. add/remove
+        "**Money Type:** " .. moneyType -- e.g. cash or bank
         "**Value:** " .. amountChanged -- e.g. 20000
     }, "\n")
 
@@ -36,7 +37,7 @@ local function sendToDiscord(playerName, changeType, amountChanged)
 end
 
 -- Alert and check
-local function monitorPlayerMoney(playerId, oldMoney, newMoney, changeType)
+local function monitorPlayerMoney(playerId, oldMoney, newMoney, moneyType, changeType)
     oldMoney = tonumber(oldMoney) or 0
     newMoney = tonumber(newMoney) or 0
     local amountChanged = newMoney - oldMoney
@@ -44,7 +45,7 @@ local function monitorPlayerMoney(playerId, oldMoney, newMoney, changeType)
         local player = QBCore.Functions.GetPlayer(playerId)
         if player then
             local playerName = player.PlayerData.charinfo.firstname .. " " .. player.PlayerData.charinfo.lastname
-            sendToDiscord(playerName, changeType, amountChanged)
+            sendToDiscord(playerName, changeType, amountChanged, moneyType)
         end
     end
 end
@@ -57,7 +58,8 @@ QBCore.Functions.AddMoney = function(source, moneyType, amount, reason, ...)
         local oldMoney = player.Functions.GetMoney(moneyType)
         local result = originalAddMoney(source, moneyType, amount, reason, ...)
         local newMoney = player.Functions.GetMoney(moneyType)
-        TriggerEvent('QBCore:Server:OnMoneyChange', player.PlayerData.source, oldMoney, newMoney, moneyType)
+        local changeType = amount > 0 and "increased" or "decreased"
+        TriggerEvent('QBCore:Server:OnMoneyChange', player.PlayerData.source, oldMoney, newMoney, moneyType, changeType)
         return result
     end
 end
@@ -70,16 +72,16 @@ QBCore.Functions.RemoveMoney = function(source, moneyType, amount, reason, ...)
         local oldMoney = player.Functions.GetMoney(moneyType)
         local result = originalRemoveMoney(source, moneyType, amount, reason, ...)
         local newMoney = player.Functions.GetMoney(moneyType)
-        TriggerEvent('QBCore:Server:OnMoneyChange', player.PlayerData.source, oldMoney, newMoney, moneyType)
+        local changeType = amount > 0 and "increased" or "decreased"
+        TriggerEvent('QBCore:Server:OnMoneyChange', player.PlayerData.source, oldMoney, newMoney, moneyType, changeType)
         return result
     end
 end
 
 -- check players money
 RegisterNetEvent('QBCore:Server:OnMoneyChange')
-AddEventHandler('QBCore:Server:OnMoneyChange', function(playerId, oldMoney, newMoney, moneyType)
-    local changeType = (moneyType == "cash" and "cash" or "bank")
-    monitorPlayerMoney(playerId, oldMoney, newMoney, changeType)
+AddEventHandler('QBCore:Server:OnMoneyChange', function(playerId, oldMoney, newMoney, moneyType, changeType)
+    monitorPlayerMoney(playerId, oldMoney, newMoney, moneyType, changeType)
 end)
 
 -- initialization on player data load
@@ -91,7 +93,7 @@ AddEventHandler('QBCore:Server:PlayerLoaded', function(playerId, playerData)
         local oldBank = player.Functions.GetMoney('bank')
 
         -- 初期化時の金額を監視
-        monitorPlayerMoney(playerId, oldCash, oldCash, "cash")
-        monitorPlayerMoney(playerId, oldBank, oldBank, "bank")
+        monitorPlayerMoney(playerId, oldCash, oldCash, "cash", "initialized")
+        monitorPlayerMoney(playerId, oldBank, oldBank, "bank", "initialized")
     end
 end)
