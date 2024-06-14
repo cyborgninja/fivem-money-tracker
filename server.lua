@@ -7,7 +7,7 @@ local discordWebhookUrl = "" -- set discordWebhookUrl
 -- send Discord message
 local function sendToDiscord(playerName, changeType, amountChanged, moneyType)
     local color
-    if changeType == "add" then
+    if moneyType == "add" then
         color = 3066993 -- green for increase
     else
         color = 15158332 -- red for decrease
@@ -17,8 +17,8 @@ local function sendToDiscord(playerName, changeType, amountChanged, moneyType)
     local title = "Money Alert"
     local description = table.concat({
         "**Player:** " .. playerName, -- e.g. John Doe
-        "**Type:** " .. changeType, -- e.g. add/remove
-        "**Money Type:** " .. moneyType -- e.g. cash or bank
+        "**Genre:** " .. changeType, -- e.g. paycheck, banking-quick-depo...
+        "**Type:** " .. moneyType, -- e.g. add or remove
         "**Value:** " .. amountChanged -- e.g. 20000
     }, "\n")
 
@@ -52,30 +52,24 @@ end
 
 -- override AddMoney
 local originalAddMoney = QBCore.Functions.AddMoney
-QBCore.Functions.AddMoney = function(source, moneyType, amount, reason, ...)
-    local player = QBCore.Functions.GetPlayer(source)
-    if player then
-        local oldMoney = player.Functions.GetMoney(moneyType)
-        local result = originalAddMoney(source, moneyType, amount, reason, ...)
-        local newMoney = player.Functions.GetMoney(moneyType)
-        local changeType = amount > 0 and "increased" or "decreased"
-        TriggerEvent('QBCore:Server:OnMoneyChange', player.PlayerData.source, oldMoney, newMoney, moneyType, changeType)
-        return result
-    end
+QBCore.Functions.AddMoney = function(self, moneyType, amount, reason, ...)
+    local oldMoney = self.Functions.GetMoney(moneyType)
+    local result = originalAddMoney(self, moneyType, amount, reason, ...)
+    local newMoney = self.Functions.GetMoney(moneyType)
+    local changeType = amount > 0 and "increased" or "decreased"
+    TriggerEvent('QBCore:Server:OnMoneyChange', self.PlayerData.source, oldMoney, newMoney, moneyType, changeType)
+    return result
 end
 
 -- override RemoveMoney
 local originalRemoveMoney = QBCore.Functions.RemoveMoney
-QBCore.Functions.RemoveMoney = function(source, moneyType, amount, reason, ...)
-    local player = QBCore.Functions.GetPlayer(source)
-    if player then
-        local oldMoney = player.Functions.GetMoney(moneyType)
-        local result = originalRemoveMoney(source, moneyType, amount, reason, ...)
-        local newMoney = player.Functions.GetMoney(moneyType)
-        local changeType = amount > 0 and "increased" or "decreased"
-        TriggerEvent('QBCore:Server:OnMoneyChange', player.PlayerData.source, oldMoney, newMoney, moneyType, changeType)
-        return result
-    end
+QBCore.Functions.RemoveMoney = function(self, moneyType, amount, reason, ...)
+    local oldMoney = self.Functions.GetMoney(moneyType)
+    local result = originalRemoveMoney(self, moneyType, amount, reason, ...)
+    local newMoney = self.Functions.GetMoney(moneyType)
+    local changeType = amount > 0 and "increased" or "decreased"
+    TriggerEvent('QBCore:Server:OnMoneyChange', self.PlayerData.source, oldMoney, newMoney, moneyType, changeType)
+    return result
 end
 
 -- check players money
