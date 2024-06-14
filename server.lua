@@ -6,14 +6,19 @@ local discordWebhookUrl = "" -- set discordWebhookUrl
 
 -- send Discord message
 local function sendToDiscord(playerName, changeType, amountChanged)
-    local color = changeType == "increased" and 3066993 or 15158332 -- green increase / red decrease
+    local color
+    if changeType == "increased" then
+        color = 3066993 -- green for increase
+    else
+        color = 15158332 -- red for decrease
+    end
 
     -- alert contents
     local title = "Money Alert"
     local description = table.concat({
         "**Player:** " .. playerName, -- e.g. John Doe
         "**Type:** " .. changeType, -- e.g. bank/cash
-        "**Value:** $" .. math.abs(amountChanged) -- e.g. 20000
+        "**Value:** " .. amountChanged -- e.g. 20000
     }, "\n")
 
     local embed = {
