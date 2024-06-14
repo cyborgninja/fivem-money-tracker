@@ -4,16 +4,14 @@ local QBCore = exports['qb-core']:GetCoreObject()
 local largeAmountThreshold = 10000 -- set amount threshold
 local discordWebhookUrl = "" -- set discordWebhookUrl
 
-
 -- send Discord message
-local function sendToDiscord(playerName, amountChanged)
-    local color = amountChanged > 0 and 3066993 or 15158332 -- green increase / red decrease
-    local changeType = amountChanged > 0 and "increased" or "decreased"
+local function sendToDiscord(playerName, changeType, amountChanged)
+    local color = changeType == "increased" and 3066993 or 15158332 -- green increase / red decrease
 
     -- alert contents
     local title = "Money Alert"
     local description = table.concat({
-        "**Player:** " .. playerName, -- e.g. Jhon Do
+        "**Player:** " .. playerName, -- e.g. John Doe
         "**Type:** " .. changeType, -- e.g. bank/cash
         "**Value:** $" .. math.abs(amountChanged) -- e.g. 20000
     }, "\n")
@@ -33,40 +31,53 @@ local function sendToDiscord(playerName, amountChanged)
 end
 
 -- Alert and check
-local function monitorPlayerMoney(playerId, oldMoney, newMoney, playerName)
+local function monitorPlayerMoney(playerId, oldMoney, newMoney, changeType)
+    oldMoney = tonumber(oldMoney) or 0
+    newMoney = tonumber(newMoney) or 0
     local amountChanged = newMoney - oldMoney
     if math.abs(amountChanged) >= largeAmountThreshold then
-        sendToDiscord(playerName, amountChanged)
+        local player = QBCore.Functions.GetPlayer(playerId)
+        if player then
+            local playerName = player.PlayerData.charinfo.firstname .. " " .. player.PlayerData.charinfo.lastname
+            sendToDiscord(playerName, changeType, amountChanged)
+        end
     end
 end
 
 -- override AddMoney
 local originalAddMoney = QBCore.Functions.AddMoney
-QBCore.Functions.AddMoney = function(self, moneyType, amount, reason, ...)
-    local oldMoney = self.Functions.GetMoney(moneyType)
-    local result = originalAddMoney(self, moneyType, amount, reason, ...)
-    local newMoney = self.Functions.GetMoney(moneyType)
-    TriggerEvent('QBCore:Server:OnMoneyChange', self.PlayerData.source, oldMoney, newMoney, moneyType, self.PlayerData.charinfo.firstname)
-    return result
+QBCore.Functions.AddMoney = function(source, moneyType, amount, reason, ...)
+    local player = QBCore.Functions.GetPlayer(source)
+    if player then
+        local oldMoney = player.Functions.GetMoney(moneyType)
+        local result = originalAddMoney(source, moneyType, amount, reason, ...)
+        local newMoney = player.Functions.GetMoney(moneyType)
+        TriggerEvent('QBCore:Server:OnMoneyChange', player.PlayerData.source, oldMoney, newMoney, moneyType)
+        return result
+    end
 end
 
 -- override RemoveMoney
 local originalRemoveMoney = QBCore.Functions.RemoveMoney
-QBCore.Functions.RemoveMoney = function(self, moneyType, amount, reason, ...)
-    local oldMoney = self.Functions.GetMoney(moneyType)
-    local result = originalRemoveMoney(self, moneyType, amount, reason, ...)
-    local newMoney = self.Functions.GetMoney(moneyType)
-    TriggerEvent('QBCore:Server:OnMoneyChange', self.PlayerData.source, oldMoney, newMoney, moneyType, self.PlayerData.charinfo.firstname)
-    return result
+QBCore.Functions.RemoveMoney = function(source, moneyType, amount, reason, ...)
+    local player = QBCore.Functions.GetPlayer(source)
+    if player then
+        local oldMoney = player.Functions.GetMoney(moneyType)
+        local result = originalRemoveMoney(source, moneyType, amount, reason, ...)
+        local newMoney = player.Functions.GetMoney(moneyType)
+        TriggerEvent('QBCore:Server:OnMoneyChange', player.PlayerData.source, oldMoney, newMoney, moneyType)
+        return result
+    end
 end
 
 -- check players money
 RegisterNetEvent('QBCore:Server:OnMoneyChange')
-AddEventHandler('QBCore:Server:OnMoneyChange', function(playerId, oldMoney, newMoney, moneyType, playerName)
-    monitorPlayerMoney(playerId, oldMoney, newMoney, playerName)
+AddEventHandler('QBCore:Server:OnMoneyChange', function(playerId, oldMoney, newMoney, moneyType)
+    local changeType = (moneyType == "cash" and "cash" or "bank")
+    monitorPlayerMoney(playerId, oldMoney, newMoney, changeType)
 end)
 
--- initialzation on player data load
+-- initialization on player data load
 RegisterNetEvent('QBCore:Server:PlayerLoaded')
 AddEventHandler('QBCore:Server:PlayerLoaded', function(playerId, playerData)
     local player = QBCore.Functions.GetPlayer(playerId)
@@ -74,7 +85,8 @@ AddEventHandler('QBCore:Server:PlayerLoaded', function(playerId, playerData)
         local oldCash = player.Functions.GetMoney('cash')
         local oldBank = player.Functions.GetMoney('bank')
 
-        monitorPlayerMoney(playerId, oldCash, oldCash, player.PlayerData.charinfo.firstname)
-        monitorPlayerMoney(playerId, oldBank, oldBank, player.PlayerData.charinfo.firstname)
+        -- 初期化時の金額を監視
+        monitorPlayerMoney(playerId, oldCash, oldCash, "cash")
+        monitorPlayerMoney(playerId, oldBank, oldBank, "bank")
     end
 end)
